@@ -1,12 +1,20 @@
 import { useState, useEffect } from 'react';
-import { Search, Calendar, FileCode, TrendingUp, ChevronDown, ChevronUp, Filter, X } from 'lucide-react';
+import { Search, Calendar, FileCode, TrendingUp, ChevronDown, ChevronUp, Filter, X, Download, Monitor, RefreshCw, Smartphone, Users } from 'lucide-react';
 import axios from 'axios';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
+const APP_CATEGORIES = [
+  { id: 'zen_desktop', name: 'Zen Desktop', ext: '.zip', icon: Monitor },
+  { id: 'zen_sync', name: 'Zen Sync', ext: '.zip', icon: RefreshCw },
+  { id: 'internal_android', name: 'Internal App', ext: '.apk', icon: Smartphone },
+  { id: 'customer_android', name: 'Customer App', ext: '.apk', icon: Users },
+];
+
 function DisplayPage() {
   const [entries, setEntries] = useState([]);
   const [filteredEntries, setFilteredEntries] = useState([]);
+  const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -20,6 +28,7 @@ function DisplayPage() {
   useEffect(() => {
     fetchEntries();
     fetchStats();
+    fetchFiles();
   }, []);
 
   useEffect(() => {
@@ -45,6 +54,15 @@ function DisplayPage() {
       setStats(response.data.stats);
     } catch (error) {
       console.error('Failed to fetch stats:', error);
+    }
+  };
+
+  const fetchFiles = async () => {
+    try {
+      const response = await axios.get(`${API_BASE}/files`);
+      setFiles(response.data.files);
+    } catch (error) {
+      console.error('Failed to fetch files:', error);
     }
   };
 
@@ -145,6 +163,18 @@ function DisplayPage() {
     });
   };
 
+  const getFileForCategory = (categoryId) => {
+    return files.find(f => f.app_category === categoryId);
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -174,6 +204,49 @@ function DisplayPage() {
           </div>
         )}
       </div>
+
+      {/* Quick Downloads */}
+      {files.length > 0 && (
+        <div className="mb-4">
+          <h2 className="text-lg font-bold text-gray-900 mb-3">Quick Downloads</h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {APP_CATEGORIES.map(category => {
+              const file = getFileForCategory(category.id);
+              const Icon = category.icon;
+              return (
+                <div key={category.id} className="card p-3 border-l-4 border-l-primary-500 flex flex-col">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <div className="p-1.5 bg-primary-50 text-primary-600 rounded">
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-gray-900 text-sm leading-tight">{category.name}</h3>
+                      {file && <p className="text-[10px] text-gray-500">{formatFileSize(file.size)}</p>}
+                    </div>
+                  </div>
+                  <div className="mt-auto pt-2 border-t border-gray-100">
+                    <a
+                      href={file ? `${API_BASE}/files/${file.id}/download` : '#'}
+                      className={`flex items-center justify-center w-full py-1.5 px-2 rounded text-xs font-medium transition-colors ${
+                        file 
+                          ? 'bg-primary-50 text-primary-700 hover:bg-primary-100' 
+                          : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      }`}
+                      download={file ? true : undefined}
+                      onClick={(e) => {
+                        if (!file) e.preventDefault();
+                      }}
+                    >
+                      <Download className="h-3 w-3 mr-1" />
+                      {file ? 'Download' : 'Unavailable'}
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Search Bar */}
       <div className="card">
@@ -296,7 +369,7 @@ function DisplayPage() {
                       {entry.modules.map((mod, idx) => (
                         <span
                           key={idx}
-                          className="text-xs px-2 py-1 rounded-full border ${getActionColor(mod.action)}"
+                          className={`text-xs px-2 py-1 rounded-full border ${getActionColor(mod.action)}`}
                         >
                           {mod.module_name}
                         </span>
