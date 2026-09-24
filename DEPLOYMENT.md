@@ -1,4 +1,4 @@
-# Deployment Guide - Work Log Tracker
+# Deployment Guide - zen-workslogs
 
 ## Quick Summary
 
@@ -31,8 +31,10 @@ Your HAVE_DONE.md Tracker application is now complete and ready for deployment t
 cd "d:\BEN\Zen\WORK_SPACE\frontend\worklogs"
 git init
 git add .
-git commit -m "Initial commit: Work Log Tracker"
-# Push to your GitHub/GitLab repository
+git commit -m "first commit"
+git branch -M main
+git remote add origin https://github.com/borist-nababan-cloud/zen-workslogs.git
+git push -u origin main
 ```
 
 ### Step 2: Create Application in Coolify
@@ -58,7 +60,7 @@ git commit -m "Initial commit: Work Log Tracker"
 If you want to test locally before deploying:
 
 ```bash
-# From the logsupdate directory
+# From the frontend\worklogs directory
 docker-compose up --build
 
 # App will be at http://localhost:3000
