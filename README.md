@@ -41,8 +41,8 @@ A modern full-stack web application for tracking and displaying work logs with f
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/borist-nababan-cloud/karunialogsapp.git
-   cd karunialogsapp
+   git clone https://github.com/borist-nababan-cloud/zen-workslogs.git
+   cd zen-workslogs
    ```
 
 2. **Install dependencies**
