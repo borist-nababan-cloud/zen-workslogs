@@ -40,7 +40,7 @@ function App() {
                 <div className="bg-primary-600 text-white p-2 rounded-lg">
                   <Eye className="h-6 w-6" />
                 </div>
-                <span className="text-xl font-bold text-gray-900">Work Log Tracker</span>
+                <span className="text-xl font-bold text-gray-900">Zen Work Logs</span>
               </Link>
             </div>
 
@@ -116,7 +116,7 @@ function App() {
       <footer className="bg-white border-t border-gray-200 mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <p className="text-center text-gray-500 text-sm">
-            Work Log Tracker - HAVE_DONE.md Viewer • Built with React & SQLite
+            Zen Work Logs - HAVE_DONE.md Viewer • Built with React & SQLite
           </p>
         </div>
       </footer>
