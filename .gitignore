@@ -1,0 +1,69 @@
+# Dependencies
+node_modules/
+
+# Client build output
+client/dist/
+client/.vite/
+
+# Server data
+server/data/
+server/uploads/
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploaded files
+uploads/
+
+# SQL files
+*.sql
+
+# Sensitive directories (contains credentials and sensitive data)
+docs/
+my-cred/
+database-docs/
+
+# Additional sensitive files that might contain credentials
+*_cred.*
+*_secret.*
+*_config.*
+*.pem
+*.key
+*.cert
+
+# Temporary and cache files
+*.tmp
+*.cache
+*.swp
+*.swo
+*~
+
+# Build artifacts
+*.exe
+*.rsm
+*.dcu
+Win32/
+Win64/
+
+# Data directory (SQLite persistence)
+data/

@@ -1,0 +1,43 @@
+# Node modules
+node_modules
+npm-debug.log
+
+# Client build artifacts (will be built in Docker)
+client/dist
+client/.vite
+
+# Server artifacts
+server/data
+server/uploads
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
+README.md
+*.md
+
+# Plan files (from Claude)
+.claude
+
+# Don't exclude package files (needed for Docker build)
+!package.json
+!package-lock.json
+!client/package.json
+!client/package-lock.json
+!server/package.json
+!server/package-lock.json
