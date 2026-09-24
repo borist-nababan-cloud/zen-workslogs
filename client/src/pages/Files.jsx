@@ -1,14 +1,22 @@
 import { useState, useEffect } from 'react';
-import { Upload, Download, Trash2, FileArchive, AlertCircle } from 'lucide-react';
+import { Download, Trash2, FileArchive, AlertCircle, Monitor, RefreshCw, Smartphone, Users } from 'lucide-react';
 import axios from 'axios';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
+
+const APP_CATEGORIES = [
+  { id: 'zen_desktop', name: 'Zen Desktop System', ext: '.zip', icon: Monitor },
+  { id: 'zen_sync', name: 'Zen Sync App', ext: '.zip', icon: RefreshCw },
+  { id: 'internal_android', name: 'Internal Android App', ext: '.apk', icon: Smartphone },
+  { id: 'customer_android', name: 'Customer Test Android App', ext: '.apk', icon: Users },
+];
 
 function FilesPage() {
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState(APP_CATEGORIES[0].id);
 
   useEffect(() => {
     fetchFiles();
@@ -27,9 +35,11 @@ function FilesPage() {
     const file = e.target.files[0];
     if (!file) return;
 
+    const categoryDef = APP_CATEGORIES.find(c => c.id === selectedCategory);
+    
     // Validate file type
-    if (!file.name.endsWith('.zip')) {
-      setError('Only .zip files are allowed');
+    if (!file.name.toLowerCase().endsWith(categoryDef.ext)) {
+      setError(`For ${categoryDef.name}, please upload a ${categoryDef.ext} file`);
       return;
     }
 
@@ -45,13 +55,14 @@ function FilesPage() {
 
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('app_category', selectedCategory);
 
     try {
-      const response = await axios.post(`${API_BASE}/files/upload`, formData, {
+      await axios.post(`${API_BASE}/files/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      setSuccess('File uploaded successfully! Old files with the same name were replaced.');
+      setSuccess(`${categoryDef.name} uploaded successfully!`);
       fetchFiles();
       e.target.value = '';
     } catch (err) {
@@ -81,33 +92,52 @@ function FilesPage() {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
+  // Map files to categories for easy display
+  const getFileForCategory = (categoryId) => {
+    return files.find(f => f.app_category === categoryId);
+  };
+
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">File Management</h1>
-        <p className="text-gray-600 mt-1">Upload and manage application files (.zip)</p>
+        <h1 className="text-3xl font-bold text-gray-900">Release Hub</h1>
+        <p className="text-gray-600 mt-1">Manage and download the latest application builds for Zen System.</p>
       </div>
 
       {/* Upload Section */}
       <div className="card">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Upload New File</h2>
-        <div className="flex items-center space-x-4">
-          <label className="btn-primary cursor-pointer">
-            <FileArchive className="h-5 w-5 inline mr-2" />
-            Select .zip File
-            <input
-              type="file"
-              accept=".zip"
-              onChange={handleUpload}
-              className="hidden"
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Upload New Release</h2>
+        
+        <div className="flex flex-col sm:flex-row sm:items-end space-y-4 sm:space-y-0 sm:space-x-4 mb-4">
+          <div className="flex-1">
+            <label className="label">Target Application</label>
+            <select 
+              className="input bg-gray-50"
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
               disabled={uploading}
-            />
-          </label>
-          {uploading && (
-            <span className="text-gray-600">Uploading...</span>
-          )}
+            >
+              {APP_CATEGORIES.map(cat => (
+                <option key={cat.id} value={cat.id}>{cat.name} ({cat.ext})</option>
+              ))}
+            </select>
+          </div>
+          
+          <div className="flex-shrink-0">
+            <label className={`btn-primary cursor-pointer flex items-center justify-center ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              <FileArchive className="h-5 w-5 inline mr-2" />
+              {uploading ? 'Uploading...' : 'Select File to Upload'}
+              <input
+                type="file"
+                accept={APP_CATEGORIES.find(c => c.id === selectedCategory)?.ext}
+                onChange={handleUpload}
+                className="hidden"
+                disabled={uploading}
+              />
+            </label>
+          </div>
         </div>
-        <p className="text-sm text-gray-500 mt-2">Max file size: 150MB. Replaces existing files with the same name.</p>
+        <p className="text-sm text-gray-500">Max file size: 150MB. Uploading a new file will replace the current version for that specific application.</p>
       </div>
 
       {/* Error/Success Messages */}
@@ -125,55 +155,73 @@ function FilesPage() {
         </div>
       )}
 
-      {/* Files List */}
-      <div className="card">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Available Files</h2>
-        {files.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">No files uploaded yet</p>
-        ) : (
-          <div className="space-y-3">
-            {files.map((file) => (
-              <div key={file.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+      {/* Files List / Hub */}
+      <h2 className="text-2xl font-bold text-gray-900 mt-8 mb-4">Latest Versions</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {APP_CATEGORIES.map(category => {
+          const file = getFileForCategory(category.id);
+          const Icon = category.icon;
+          
+          return (
+            <div key={category.id} className="card flex flex-col h-full border-l-4 border-l-primary-500">
+              <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center space-x-3">
-                  <FileArchive className="h-8 w-8 text-primary-600" />
+                  <div className="p-2 bg-primary-50 text-primary-600 rounded-lg">
+                    <Icon className="h-6 w-6" />
+                  </div>
                   <div>
-                    <p className="font-medium text-gray-900">{file.original_name}</p>
-                    <p className="text-sm text-gray-500">
-                      {formatFileSize(file.size)} • Uploaded {new Date(file.upload_date).toLocaleDateString()}
-                    </p>
+                    <h3 className="font-bold text-gray-900">{category.name}</h3>
+                    <p className="text-sm text-gray-500">{category.ext} format</p>
                   </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <a
-                    href={`${API_BASE}/files/${file.id}/download`}
-                    className="btn-secondary flex items-center space-x-2"
-                    download
-                  >
-                    <Download className="h-4 w-4" />
-                    <span>Download</span>
-                  </a>
+                {file && (
                   <button
                     onClick={() => handleDelete(file.id)}
-                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                    className="p-2 text-red-500 hover:bg-red-50 hover:text-red-700 rounded-lg transition-colors"
+                    title="Delete this version"
                   >
                     <Trash2 className="h-5 w-5" />
                   </button>
-                </div>
+                )}
               </div>
-            ))}
-          </div>
-        )}
-      </div>
 
-      {/* Info Section */}
-      <div className="card bg-blue-50 border-blue-200">
-        <h3 className="font-medium text-blue-900 mb-2">How it works</h3>
-        <ul className="text-sm text-blue-800 space-y-1">
-          <li>• Upload .zip files containing your application builds</li>
-          <li>• Files appear as download links in the main navigation</li>
-          <li>• Uploading a file with the same name replaces the old version</li>
-          <li>• Access this page manually: /files</li>
-        </ul>
+              <div className="flex-grow">
+                {file ? (
+                  <div className="bg-gray-50 rounded p-3 mb-4 border border-gray-100">
+                    <p className="text-sm font-medium text-gray-800 truncate" title={file.original_name}>
+                      {file.original_name}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {formatFileSize(file.size)} • Uploaded {new Date(file.upload_date).toLocaleDateString()}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 rounded p-3 mb-4 border border-gray-100 border-dashed flex items-center justify-center h-[76px]">
+                    <p className="text-sm text-gray-500 italic">No version uploaded yet</p>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <a
+                  href={file ? `${API_BASE}/files/${file.id}/download` : '#'}
+                  className={`flex items-center justify-center w-full py-2 px-4 rounded-lg font-medium transition-colors ${
+                    file 
+                      ? 'bg-primary-600 hover:bg-primary-700 text-white' 
+                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  }`}
+                  download={file ? true : undefined}
+                  onClick={(e) => {
+                    if (!file) e.preventDefault();
+                  }}
+                >
+                  <Download className="h-5 w-5 mr-2" />
+                  {file ? 'Download Latest' : 'Not Available'}
+                </a>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -52,16 +52,18 @@ function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_modules_name ON modules(module_name);
   `);
 
-  // Create files table for EXE/zip uploads
+  // Create files table for EXE/zip/apk uploads
+  // Dropping existing table because we are changing schema and data is disposable
+  db.exec(`DROP TABLE IF EXISTS files`);
   db.exec(`
-    CREATE TABLE IF NOT EXISTS files (
+    CREATE TABLE files (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       filename TEXT NOT NULL,
       original_name TEXT NOT NULL,
       mime_type TEXT,
       size INTEGER NOT NULL,
       upload_date TEXT DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(filename)
+      app_category TEXT UNIQUE NOT NULL
     )
   `);
 
@@ -214,17 +216,18 @@ const dbHelpers = {
     return db.prepare('SELECT * FROM files WHERE filename = ?').get(filename);
   },
 
-  upsertFile: (filename, originalName, mimeType, size) => {
+  upsertFile: (filename, originalName, mimeType, size, appCategory) => {
     const stmt = db.prepare(`
-      INSERT INTO files (filename, original_name, mime_type, size)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(filename) DO UPDATE SET
+      INSERT INTO files (filename, original_name, mime_type, size, app_category)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(app_category) DO UPDATE SET
+        filename = excluded.filename,
         original_name = excluded.original_name,
         mime_type = excluded.mime_type,
         size = excluded.size,
         upload_date = CURRENT_TIMESTAMP
     `);
-    return stmt.run(filename, originalName, mimeType, size);
+    return stmt.run(filename, originalName, mimeType, size, appCategory);
   },
 
   deleteFile: (id) => {

@@ -24,12 +24,12 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage: storage,
   fileFilter: (req, file, cb) => {
-    // Allow zip files
+    // Allow zip and apk files
     const ext = path.extname(file.originalname).toLowerCase();
-    if (ext === '.zip') {
+    if (ext === '.zip' || ext === '.apk') {
       cb(null, true);
     } else {
-      cb(new Error('Only .zip files are allowed'));
+      cb(new Error('Only .zip and .apk files are allowed'));
     }
   },
   limits: {
@@ -47,6 +47,11 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
+    const { app_category } = req.body;
+    if (!app_category) {
+      return res.status(400).json({ error: 'app_category is required' });
+    }
+
     const dbHelpers = req.app.get('dbHelpers');
 
     // Save file info to database
@@ -54,7 +59,8 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       req.file.filename,
       req.file.originalname,
       req.file.mimetype,
-      req.file.size
+      req.file.size,
+      app_category
     );
 
     res.json({
