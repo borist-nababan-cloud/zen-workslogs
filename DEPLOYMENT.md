@@ -28,7 +28,7 @@ Your HAVE_DONE.md Tracker application is now complete and ready for deployment t
 ### Step 1: Push to Git
 
 ```bash
-cd "d:\BEN\KMR\_New Source\WEBAPPS\logsupdate"
+cd "d:\BEN\Zen\WORK_SPACE\frontend\worklogs"
 git init
 git add .
 git commit -m "Initial commit: Work Log Tracker"
