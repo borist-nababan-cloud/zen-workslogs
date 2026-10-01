@@ -67,3 +67,15 @@ Win64/
 
 # Data directory (SQLite persistence)
 data/
+
+*.env
+.env
+*.sql
+docs/
+
+
+*.env
+.env
+*.sql
+docs/
+
