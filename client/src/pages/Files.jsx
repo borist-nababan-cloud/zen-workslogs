@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Download, Trash2, FileArchive, AlertCircle, Monitor, RefreshCw, Smartphone, Users } from 'lucide-react';
+import { Download, Trash2, FileArchive, AlertCircle, Monitor, RefreshCw, Smartphone, Users, Cloud, CheckCircle, ExternalLink } from 'lucide-react';
 import axios from 'axios';
+import { uploadReleaseBinary } from '../supabase';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
@@ -53,20 +54,26 @@ function FilesPage() {
     setError(null);
     setSuccess(null);
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('app_category', selectedCategory);
-
     try {
-      await axios.post(`${API_BASE}/files/upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      // 1. Direct high-speed upload to Supabase Storage (bypasses reverse proxy)
+      const { publicUrl } = await uploadReleaseBinary(file, selectedCategory);
+
+      // 2. Record release metadata and CDN URL in database
+      await axios.post(`${API_BASE}/files/record`, {
+        filename: file.name,
+        original_name: file.name,
+        mime_type: file.type || 'application/octet-stream',
+        size: file.size,
+        app_category: selectedCategory,
+        download_url: publicUrl
       });
 
-      setSuccess(`${categoryDef.name} uploaded successfully!`);
+      setSuccess(`${categoryDef.name} uploaded and published to Supabase CDN successfully!`);
       fetchFiles();
       e.target.value = '';
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to upload file');
+      console.error('Direct Supabase upload error:', err);
+      setError(err.message || err.response?.data?.error || 'Failed to upload file to Supabase');
     } finally {
       setUploading(false);
     }
@@ -204,19 +211,21 @@ function FilesPage() {
 
               <div>
                 <a
-                  href={file ? `${API_BASE}/files/${file.id}/download` : '#'}
+                  href={file ? (file.download_url || `${API_BASE}/files/${file.id}/download`) : '#'}
                   className={`flex items-center justify-center w-full py-2 px-4 rounded-lg font-medium transition-colors ${
                     file 
-                      ? 'bg-primary-600 hover:bg-primary-700 text-white' 
+                      ? 'bg-primary-600 hover:bg-primary-700 text-white shadow-sm' 
                       : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   }`}
-                  download={file ? true : undefined}
+                  target={file?.download_url ? '_blank' : undefined}
+                  rel={file?.download_url ? 'noopener noreferrer' : undefined}
+                  download={file && !file.download_url ? true : undefined}
                   onClick={(e) => {
                     if (!file) e.preventDefault();
                   }}
                 >
                   <Download className="h-5 w-5 mr-2" />
-                  {file ? 'Download Latest' : 'Not Available'}
+                  {file ? 'Download from CDN' : 'Not Available'}
                 </a>
               </div>
             </div>

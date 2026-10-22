@@ -38,46 +38,90 @@ const upload = multer({
 });
 
 /**
- * POST /api/files/upload
- * Upload a zip file
+ * POST /api/files/record
+ * Record metadata for a release asset uploaded directly to Supabase Storage
  */
-router.post('/upload', upload.single('file'), async (req, res) => {
+router.post('/record', async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
-    }
-
-    const { app_category } = req.body;
-    if (!app_category) {
-      return res.status(400).json({ error: 'app_category is required' });
+    const { filename, original_name, mime_type, size, app_category, download_url } = req.body;
+    if (!app_category || !download_url) {
+      return res.status(400).json({ error: 'app_category and download_url are required' });
     }
 
     const dbHelpers = req.app.get('dbHelpers');
-
-    // Save file info to database
     const result = dbHelpers.upsertFile(
-      req.file.filename,
-      req.file.originalname,
-      req.file.mimetype,
-      req.file.size,
-      app_category
+      filename || original_name,
+      original_name || filename,
+      mime_type || 'application/octet-stream',
+      size || 0,
+      app_category,
+      download_url
     );
 
     res.json({
       success: true,
-      message: 'File uploaded successfully',
+      message: 'File recorded successfully',
       file: {
         id: result.lastInsertRowid,
-        filename: req.file.filename,
-        original_name: req.file.originalname,
-        size: req.file.size
+        filename: filename || original_name,
+        original_name: original_name || filename,
+        size: size || 0,
+        app_category,
+        download_url
       }
     });
-
   } catch (error) {
-    console.error('File upload error:', error);
-    res.status(500).json({ error: 'Failed to upload file' });
+    console.error('File record error:', error);
+    res.status(500).json({ error: 'Failed to record file metadata' });
   }
+});
+
+/**
+ * POST /api/files/upload
+ * Fallback local server file upload
+ */
+router.post('/upload', (req, res) => {
+  upload.single('file')(req, res, async (err) => {
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ error: `Upload error: ${err.message}` });
+    } else if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      const { app_category } = req.body;
+      if (!app_category) {
+        return res.status(400).json({ error: 'app_category is required' });
+      }
+
+      const dbHelpers = req.app.get('dbHelpers');
+      const result = dbHelpers.upsertFile(
+        req.file.filename,
+        req.file.originalname,
+        req.file.mimetype,
+        req.file.size,
+        app_category
+      );
+
+      res.json({
+        success: true,
+        message: 'File uploaded successfully',
+        file: {
+          id: result.lastInsertRowid,
+          filename: req.file.filename,
+          original_name: req.file.originalname,
+          size: req.file.size
+        }
+      });
+    } catch (error) {
+      console.error('File upload error:', error);
+      res.status(500).json({ error: 'Failed to upload file' });
+    }
+  });
 });
 
 /**
@@ -106,6 +150,11 @@ router.get('/:id/download', (req, res) => {
 
     if (!file) {
       return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Direct redirect to Supabase high-speed CDN if available
+    if (file.download_url) {
+      return res.redirect(file.download_url);
     }
 
     const filePath = path.join(__dirname, '../uploads/files', file.filename);

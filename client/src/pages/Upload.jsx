@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
-import { Upload, FileText, CheckCircle, AlertCircle, Loader2, X } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertCircle, Loader2, X, ExternalLink, Cloud } from 'lucide-react';
 import axios from 'axios';
+import { uploadHaveDoneLog } from '../supabase';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
@@ -95,11 +96,24 @@ function UploadPage() {
     formData.append('file', file);
 
     try {
+      // 1. Direct upload & archive to Supabase Storage
+      let supabasePublicUrl = null;
+      try {
+        const sbRes = await uploadHaveDoneLog(file);
+        supabasePublicUrl = sbRes.publicUrl;
+      } catch (sbErr) {
+        console.warn('Supabase Storage backup warning:', sbErr);
+      }
+
+      // 2. Parse & smart merge entries in database
       const response = await axios.post(`${API_BASE}/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      setResult(response.data);
+      setResult({
+        ...response.data,
+        supabaseUrl: supabasePublicUrl
+      });
       setPreview(null);
       setFile(null);
       if (fileInputRef.current) {
@@ -312,6 +326,24 @@ function UploadPage() {
             <div className="flex-1">
               <h3 className="font-medium text-green-900">Upload Successful!</h3>
               <p className="text-green-700 mt-1">{result.message}</p>
+
+              {result.supabaseUrl && (
+                <div className="mt-3 bg-white/80 border border-green-200 rounded p-2.5 flex items-center justify-between text-xs">
+                  <div className="flex items-center space-x-2 text-green-800">
+                    <Cloud className="h-4 w-4 text-green-600" />
+                    <span>Published to Supabase Cloud Storage (Global CDN)</span>
+                  </div>
+                  <a 
+                    href={result.supabaseUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center font-semibold text-primary-600 hover:text-primary-700"
+                  >
+                    <span>View on CDN</span>
+                    <ExternalLink className="h-3 w-3 ml-1" />
+                  </a>
+                </div>
+              )}
 
               <div className="mt-4 bg-white rounded-lg p-4">
                 <h4 className="font-medium text-gray-900 mb-3">Merge Statistics</h4>

@@ -52,20 +52,26 @@ function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_modules_name ON modules(module_name);
   `);
 
-  // Create files table for EXE/zip/apk uploads
-  // Dropping existing table because we are changing schema and data is disposable
-  db.exec(`DROP TABLE IF EXISTS files`);
+  // Create files table for release uploads with download_url support
   db.exec(`
-    CREATE TABLE files (
+    CREATE TABLE IF NOT EXISTS files (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       filename TEXT NOT NULL,
       original_name TEXT NOT NULL,
       mime_type TEXT,
       size INTEGER NOT NULL,
       upload_date TEXT DEFAULT CURRENT_TIMESTAMP,
-      app_category TEXT UNIQUE NOT NULL
+      app_category TEXT UNIQUE NOT NULL,
+      download_url TEXT
     )
   `);
+
+  // Auto-migrate: ensure download_url column exists if table existed previously
+  try {
+    db.exec(`ALTER TABLE files ADD COLUMN download_url TEXT`);
+  } catch (e) {
+    // Column already exists
+  }
 
   console.log('Database initialized successfully');
 
@@ -216,18 +222,19 @@ const dbHelpers = {
     return db.prepare('SELECT * FROM files WHERE filename = ?').get(filename);
   },
 
-  upsertFile: (filename, originalName, mimeType, size, appCategory) => {
+  upsertFile: (filename, originalName, mimeType, size, appCategory, downloadUrl = null) => {
     const stmt = db.prepare(`
-      INSERT INTO files (filename, original_name, mime_type, size, app_category)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO files (filename, original_name, mime_type, size, app_category, download_url)
+      VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(app_category) DO UPDATE SET
         filename = excluded.filename,
         original_name = excluded.original_name,
         mime_type = excluded.mime_type,
         size = excluded.size,
+        download_url = COALESCE(excluded.download_url, files.download_url),
         upload_date = CURRENT_TIMESTAMP
     `);
-    return stmt.run(filename, originalName, mimeType, size, appCategory);
+    return stmt.run(filename, originalName, mimeType, size, appCategory, downloadUrl);
   },
 
   deleteFile: (id) => {

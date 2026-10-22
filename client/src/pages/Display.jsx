@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Calendar, FileCode, TrendingUp, ChevronDown, ChevronUp, Filter, X, Download, Monitor, RefreshCw, Smartphone, Users } from 'lucide-react';
+import { Search, Calendar, FileCode, TrendingUp, ChevronDown, ChevronUp, Filter, X, Download, Monitor, RefreshCw, Smartphone, Users, FileText, ExternalLink } from 'lucide-react';
 import axios from 'axios';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -192,7 +192,18 @@ function DisplayPage() {
           <p className="text-gray-600 mt-1">View and search your work updates</p>
         </div>
         {stats && (
-          <div className="flex items-center space-x-4 text-sm">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <a 
+              href="https://ihdlwogvjfgawgsalgng.supabase.co/storage/v1/object/public/zen-releases/docs/HAVE_DONE.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center space-x-1.5 bg-primary-50 text-primary-700 hover:bg-primary-100 px-3 py-2 rounded-lg border border-primary-200 font-medium transition-colors shadow-sm"
+              title="Download raw HAVE_DONE.md directly from Supabase Cloud CDN"
+            >
+              <FileText className="h-4 w-4 text-primary-600" />
+              <span>HAVE_DONE.md (CDN)</span>
+              <ExternalLink className="h-3 w-3 opacity-70" />
+            </a>
             <div className="flex items-center space-x-2 bg-white px-3 py-2 rounded-lg border">
               <Calendar className="h-4 w-4 text-primary-600" />
               <span className="font-medium">{stats.totalEntries} entries</span>
@@ -226,19 +237,21 @@ function DisplayPage() {
                   </div>
                   <div className="mt-auto pt-2 border-t border-gray-100">
                     <a
-                      href={file ? `${API_BASE}/files/${file.id}/download` : '#'}
+                      href={file ? (file.download_url || `${API_BASE}/files/${file.id}/download`) : '#'}
+                      target={file?.download_url ? '_blank' : undefined}
+                      rel={file?.download_url ? 'noopener noreferrer' : undefined}
                       className={`flex items-center justify-center w-full py-1.5 px-2 rounded text-xs font-medium transition-colors ${
                         file 
                           ? 'bg-primary-50 text-primary-700 hover:bg-primary-100' 
                           : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                       }`}
-                      download={file ? true : undefined}
+                      download={file && !file.download_url ? true : undefined}
                       onClick={(e) => {
                         if (!file) e.preventDefault();
                       }}
                     >
                       <Download className="h-3 w-3 mr-1" />
-                      {file ? 'Download' : 'Unavailable'}
+                      {file ? 'Download (CDN)' : 'Unavailable'}
                     </a>
                   </div>
                 </div>
