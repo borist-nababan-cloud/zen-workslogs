@@ -1,239 +1,476 @@
-import { useState, useEffect } from 'react';
-import { Download, Trash2, FileArchive, AlertCircle, Monitor, RefreshCw, Smartphone, Users, Cloud, CheckCircle, ExternalLink } from 'lucide-react';
-import axios from 'axios';
-import { uploadReleaseBinary } from '../supabase';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  Download,
+  Trash2,
+  FileArchive,
+  AlertCircle,
+  Monitor,
+  RefreshCw,
+  Smartphone,
+  Users,
+  Tv,
+  CheckCircle,
+  Lock,
+  UploadCloud,
+  Loader2,
+} from 'lucide-react';
+import {
+  supabase,
+  IS_SUPABASE_CONFIGURED,
+  APP_CATEGORIES,
+  uploadReleaseBinary,
+  deleteReleaseObject,
+  buildDownloadUrl,
+} from '../supabase';
+import { useAuth } from '../context/AuthContext';
+import { releaseUploadSchema, formatZodError } from '../utils/validation';
+import { mapSafeErrorMessage } from '../utils/errorShield';
 
-const API_BASE = import.meta.env.VITE_API_BASE || '/api';
+const CATEGORY_ICONS = {
+  zen_desktop: Monitor,
+  zen_sync: RefreshCw,
+  internal_android: Smartphone,
+  customer_android: Users,
+  dashboard_tv: Tv,
+};
 
-const APP_CATEGORIES = [
-  { id: 'zen_desktop', name: 'Zen Desktop System', ext: '.zip', icon: Monitor },
-  { id: 'zen_sync', name: 'Zen Sync App', ext: '.zip', icon: RefreshCw },
-  { id: 'internal_android', name: 'Internal Android App', ext: '.apk', icon: Smartphone },
-  { id: 'customer_android', name: 'Customer Test Android App', ext: '.apk', icon: Users },
-];
+function formatFileSize(bytes) {
+  if (!bytes || bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${Math.round((bytes / Math.pow(k, i)) * 100) / 100} ${sizes[i]}`;
+}
 
-function FilesPage() {
-  const [files, setFiles] = useState([]);
+function formatDateID(ts) {
+  if (!ts) return '-';
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return ts;
+  return d.toLocaleString('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+export default function FilesPage({ onRequestLogin }) {
+  const { user, isSuperuser } = useAuth();
+  const [releases, setReleases] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState(APP_CATEGORIES[0].id);
+  const [version, setVersion] = useState('');
+  const [notes, setNotes] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  const [selectedCategory, setSelectedCategory] = useState(APP_CATEGORIES[0].id);
 
-  useEffect(() => {
-    fetchFiles();
-  }, []);
-
-  const fetchFiles = async () => {
-    try {
-      const response = await axios.get(`${API_BASE}/files`);
-      setFiles(response.data.files);
-    } catch (err) {
-      console.error('Failed to fetch files:', err);
-    }
-  };
-
-  const handleUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const categoryDef = APP_CATEGORIES.find(c => c.id === selectedCategory);
-    
-    // Validate file type
-    if (!file.name.toLowerCase().endsWith(categoryDef.ext)) {
-      setError(`For ${categoryDef.name}, please upload a ${categoryDef.ext} file`);
+  const fetchReleases = useCallback(async () => {
+    if (!supabase || !IS_SUPABASE_CONFIGURED) {
+      setError('Konfigurasi koneksi server belum lengkap, silakan hubungi tim IT.');
+      setLoading(false);
       return;
     }
 
-    // Validate file size (150MB)
-    if (file.size > 150 * 1024 * 1024) {
-      setError('File size must be less than 150MB');
+    setLoading(true);
+    try {
+      const { data, error: fetchErr } = await supabase
+        .from('work_log_releases')
+        .select('*')
+        .order('uploaded_at', { ascending: false });
+      if (fetchErr) throw fetchErr;
+      setReleases(data || []);
+    } catch (err) {
+      setError(mapSafeErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchReleases();
+  }, [fetchReleases]);
+
+  const activeCategory = APP_CATEGORIES.find((c) => c.id === selectedCategory) || APP_CATEGORIES[0];
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!isSuperuser || !supabase) {
+      setError('Akses ditolak. Fitur ini hanya tersedia untuk SUPERUSER (Role ID 8).');
+      e.target.value = '';
+      return;
+    }
+
+    const parsedMeta = releaseUploadSchema.safeParse({
+      app_category: selectedCategory,
+      version,
+      notes,
+    });
+    if (!parsedMeta.success) {
+      setError(formatZodError(parsedMeta));
+      e.target.value = '';
+      return;
+    }
+
+    const lowerName = file.name.toLowerCase();
+    const isAllowedExt = activeCategory.extensions.some((ext) => lowerName.endsWith(ext));
+    if (!isAllowedExt) {
+      setError(
+        `Untuk ${activeCategory.name}, mohon unggah berkas berformat ${activeCategory.extLabel}.`
+      );
+      e.target.value = '';
+      return;
+    }
+
+    if (file.size > 500 * 1024 * 1024) {
+      setError('Ukuran file maksimal adalah 500 MB.');
+      e.target.value = '';
       return;
     }
 
     setUploading(true);
+    setProgress(0);
     setError(null);
     setSuccess(null);
 
     try {
-      // 1. Direct high-speed upload to Supabase Storage (bypasses reverse proxy)
-      const { publicUrl } = await uploadReleaseBinary(file, selectedCategory);
+      const existing = releases.find((r) => r.app_category === selectedCategory);
 
-      // 2. Record release metadata and CDN URL in database
-      await axios.post(`${API_BASE}/files/record`, {
-        filename: file.name,
-        original_name: file.name,
-        mime_type: file.type || 'application/octet-stream',
-        size: file.size,
-        app_category: selectedCategory,
-        download_url: publicUrl
-      });
+      const { storagePath, publicUrl, sanitizedName, contentType } = await uploadReleaseBinary(
+        file,
+        selectedCategory,
+        setProgress
+      );
 
-      setSuccess(`${categoryDef.name} uploaded and published to Supabase CDN successfully!`);
-      fetchFiles();
-      e.target.value = '';
+      const { error: dbErr } = await supabase.from('work_log_releases').upsert(
+        {
+          app_category: parsedMeta.data.app_category,
+          app_name: activeCategory.name,
+          filename: sanitizedName,
+          original_name: file.name,
+          version: parsedMeta.data.version || null,
+          mime_type: contentType,
+          size: file.size,
+          storage_path: storagePath,
+          download_url: publicUrl,
+          notes: parsedMeta.data.notes || null,
+          uploaded_by: user?.id || null,
+          uploaded_at: new Date().toISOString(),
+        },
+        { onConflict: 'app_category' }
+      );
+
+      if (dbErr) throw dbErr;
+
+      if (existing?.storage_path && existing.storage_path !== storagePath) {
+        try {
+          await deleteReleaseObject(existing.storage_path);
+        } catch {
+          // Kegagalan pembersihan berkas lama tidak membatalkan rilis baru yang sudah terpublikasi
+        }
+      }
+
+      setSuccess(`${activeCategory.name} (${file.name}) berhasil diunggah dan dipublikasikan ke CDN!`);
+      setVersion('');
+      setNotes('');
+      await fetchReleases();
     } catch (err) {
-      console.error('Direct Supabase upload error:', err);
-      setError(err.message || err.response?.data?.error || 'Failed to upload file to Supabase');
+      setError(mapSafeErrorMessage(err));
     } finally {
       setUploading(false);
+      setProgress(0);
+      e.target.value = '';
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this file?')) return;
+  const handleDelete = async (rel) => {
+    if (!isSuperuser || !supabase) return;
+    if (!window.confirm(`Hapus rilis ${rel.app_name} (${rel.filename}) dari Release Hub?`)) return;
 
+    setDeletingId(rel.id);
+    setError(null);
+    setSuccess(null);
     try {
-      await axios.delete(`${API_BASE}/files/${id}`);
-      setSuccess('File deleted successfully');
-      fetchFiles();
+      if (rel.storage_path) {
+        try {
+          await deleteReleaseObject(rel.storage_path);
+        } catch {
+          // Lanjutkan penghapusan metadata bila objek storage sudah terhapus sebelumnya
+        }
+      }
+
+      const { error: delErr } = await supabase
+        .from('work_log_releases')
+        .delete()
+        .eq('id', rel.id);
+      if (delErr) throw delErr;
+
+      setSuccess(`Rilis ${rel.app_name} berhasil dihapus.`);
+      await fetchReleases();
     } catch (err) {
-      setError('Failed to delete file');
+      setError(mapSafeErrorMessage(err));
+    } finally {
+      setDeletingId(null);
     }
-  };
-
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-  };
-
-  // Map files to categories for easy display
-  const getFileForCategory = (categoryId) => {
-    return files.find(f => f.app_category === categoryId);
   };
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Release Hub</h1>
-        <p className="text-gray-600 mt-1">Manage and download the latest application builds for Zen System.</p>
+        <h1 className="text-2xl sm:text-3xl font-bold text-zen-charcoal">
+          Release Hub Ekosistem Zen
+        </h1>
+        <p className="text-sm text-zen-charcoal/70 mt-1">
+          Unduh rilis aplikasi terbaru (.exe, .zip, .apk) langsung melalui CDN Supabase Production.
+        </p>
       </div>
 
-      {/* Upload Section */}
-      <div className="card">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Upload New Release</h2>
-        
-        <div className="flex flex-col sm:flex-row sm:items-end space-y-4 sm:space-y-0 sm:space-x-4 mb-4">
-          <div className="flex-1">
-            <label className="label">Target Application</label>
-            <select 
-              className="input bg-gray-50"
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              disabled={uploading}
-            >
-              {APP_CATEGORIES.map(cat => (
-                <option key={cat.id} value={cat.id}>{cat.name} ({cat.ext})</option>
-              ))}
-            </select>
+      {/* Panel Upload (Khusus SUPERUSER Role ID 8) */}
+      {isSuperuser ? (
+        <div className="card space-y-4">
+          <div className="flex items-center space-x-2">
+            <UploadCloud className="h-5 w-5 text-primary-600" />
+            <h2 className="text-lg font-semibold text-zen-charcoal">Unggah Rilis Baru</h2>
           </div>
-          
-          <div className="flex-shrink-0">
-            <label className={`btn-primary cursor-pointer flex items-center justify-center ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-              <FileArchive className="h-5 w-5 inline mr-2" />
-              {uploading ? 'Uploading...' : 'Select File to Upload'}
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="sm:col-span-2">
+              <label className="label">Aplikasi Target *</label>
+              <select
+                className="input bg-zen-linen/40"
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                disabled={uploading}
+              >
+                {APP_CATEGORIES.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name} ({cat.extLabel})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="label">Versi Rilis (Opsional)</label>
               <input
-                type="file"
-                accept={APP_CATEGORIES.find(c => c.id === selectedCategory)?.ext}
-                onChange={handleUpload}
-                className="hidden"
+                type="text"
+                value={version}
+                onChange={(e) => setVersion(e.target.value)}
+                placeholder="Mis. v2.4.1"
+                className="input"
                 disabled={uploading}
               />
-            </label>
+            </div>
           </div>
-        </div>
-        <p className="text-sm text-gray-500">Max file size: 150MB. Uploading a new file will replace the current version for that specific application.</p>
-      </div>
 
-      {/* Error/Success Messages */}
-      {error && (
-        <div className="card bg-red-50 border-red-200">
-          <div className="flex items-start space-x-3">
-            <AlertCircle className="h-6 w-6 text-red-600 flex-shrink-0 mt-0.5" />
-            <p className="text-red-700">{error}</p>
+          <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+            <div className="flex-1">
+              <label className="label">Catatan Rilis Singkat (Opsional)</label>
+              <input
+                type="text"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Contoh: Perbaikan socket startup & tombol Sync Cloud HRD"
+                className="input"
+                disabled={uploading}
+              />
+            </div>
+
+            <div className="shrink-0">
+              <label
+                className={`btn-primary cursor-pointer inline-flex items-center justify-center ${
+                  uploading ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                {uploading ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <FileArchive className="h-4 w-4 mr-2" />
+                )}
+                <span>{uploading ? `Mengunggah ${progress}%...` : 'Pilih File Rilis'}</span>
+                <input
+                  type="file"
+                  accept={activeCategory.accept}
+                  onChange={handleFileChange}
+                  className="hidden"
+                  disabled={uploading}
+                />
+              </label>
+            </div>
           </div>
+
+          {uploading && (
+            <div className="space-y-1.5">
+              <div className="w-full bg-zen-linen rounded-full h-2.5 overflow-hidden border border-zen-sand/60">
+                <div
+                  className="bg-primary-500 h-2.5 transition-all duration-200"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <p className="text-xs text-zen-charcoal/70 text-right">
+                Mengunggah via TUS Resumable Upload... {progress}%
+              </p>
+            </div>
+          )}
+
+          <p className="text-xs text-zen-charcoal/60">
+            Batas ukuran file: 500 MB ({activeCategory.extLabel}). Mengunggah versi baru otomatis
+            menggantikan rilis sebelumnya untuk aplikasi tersebut.
+          </p>
+        </div>
+      ) : (
+        <div className="card bg-zen-linen/70 border-zen-sand flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4">
+          <div className="flex items-start space-x-3">
+            <div className="p-2 bg-white rounded-lg border border-zen-sand text-zen-charcoal/70">
+              <Lock className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-zen-charcoal">
+                Mode Baca Publik (Unduhan Terbuka)
+              </h3>
+              <p className="text-xs text-zen-charcoal/70 mt-0.5">
+                Hanya akun <strong>SUPERUSER (Role ID 8)</strong> yang dapat mengunggah atau
+                menghapus paket rilis.
+              </p>
+            </div>
+          </div>
+          {!user && onRequestLogin && (
+            <button
+              type="button"
+              onClick={onRequestLogin}
+              className="btn-primary text-xs shrink-0"
+            >
+              Masuk Admin (Role 8)
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Alerts */}
+      {error && (
+        <div className="card bg-red-50 border-red-200 p-4 flex items-start space-x-3">
+          <AlertCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+          <p className="text-sm text-red-700">{error}</p>
         </div>
       )}
       {success && (
-        <div className="card bg-green-50 border-green-200">
-          <p className="text-green-700">{success}</p>
+        <div className="card bg-emerald-50 border-emerald-200 p-4 flex items-start space-x-3">
+          <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+          <p className="text-sm text-emerald-800">{success}</p>
         </div>
       )}
 
-      {/* Files List / Hub */}
-      <h2 className="text-2xl font-bold text-gray-900 mt-8 mb-4">Latest Versions</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {APP_CATEGORIES.map(category => {
-          const file = getFileForCategory(category.id);
-          const Icon = category.icon;
-          
-          return (
-            <div key={category.id} className="card flex flex-col h-full border-l-4 border-l-primary-500">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-primary-50 text-primary-600 rounded-lg">
-                    <Icon className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900">{category.name}</h3>
-                    <p className="text-sm text-gray-500">{category.ext} format</p>
-                  </div>
-                </div>
-                {file && (
-                  <button
-                    onClick={() => handleDelete(file.id)}
-                    className="p-2 text-red-500 hover:bg-red-50 hover:text-red-700 rounded-lg transition-colors"
-                    title="Delete this version"
-                  >
-                    <Trash2 className="h-5 w-5" />
-                  </button>
-                )}
-              </div>
+      {/* Daftar 5 Rilis Aplikasi */}
+      <div>
+        <h2 className="text-xl font-bold text-zen-charcoal mb-4">Versi Terbaru Tersedia</h2>
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-pulse">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="card h-44 bg-white/80" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {APP_CATEGORIES.map((category) => {
+              const rel = releases.find((r) => r.app_category === category.id);
+              const Icon = CATEGORY_ICONS[category.id] || Monitor;
+              const isDeleting = rel && deletingId === rel.id;
 
-              <div className="flex-grow">
-                {file ? (
-                  <div className="bg-gray-50 rounded p-3 mb-4 border border-gray-100">
-                    <p className="text-sm font-medium text-gray-800 truncate" title={file.original_name}>
-                      {file.original_name}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {formatFileSize(file.size)} • Uploaded {new Date(file.upload_date).toLocaleDateString()}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="bg-gray-50 rounded p-3 mb-4 border border-gray-100 border-dashed flex items-center justify-center h-[76px]">
-                    <p className="text-sm text-gray-500 italic">No version uploaded yet</p>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <a
-                  href={file ? (file.download_url || `${API_BASE}/files/${file.id}/download`) : '#'}
-                  className={`flex items-center justify-center w-full py-2 px-4 rounded-lg font-medium transition-colors ${
-                    file 
-                      ? 'bg-primary-600 hover:bg-primary-700 text-white shadow-sm' 
-                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  }`}
-                  target={file?.download_url ? '_blank' : undefined}
-                  rel={file?.download_url ? 'noopener noreferrer' : undefined}
-                  download={file && !file.download_url ? true : undefined}
-                  onClick={(e) => {
-                    if (!file) e.preventDefault();
-                  }}
+              return (
+                <div
+                  key={category.id}
+                  className="card flex flex-col justify-between border-l-4 border-l-primary-500 p-5"
                 >
-                  <Download className="h-5 w-5 mr-2" />
-                  {file ? 'Download from CDN' : 'Not Available'}
-                </a>
-              </div>
-            </div>
-          );
-        })}
+                  <div>
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex items-center space-x-3">
+                        <div className="p-2.5 bg-primary-50 text-primary-600 rounded-xl">
+                          <Icon className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-bold text-zen-charcoal">{category.name}</h3>
+                            {rel?.version && (
+                              <span className="px-2 py-0.5 text-[11px] font-semibold bg-primary-100 text-primary-800 rounded-full">
+                                {rel.version}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-zen-charcoal/60">
+                            Format {category.extLabel} • {category.description}
+                          </p>
+                        </div>
+                      </div>
+
+                      {rel && isSuperuser && (
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(rel)}
+                          disabled={isDeleting}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg border border-transparent hover:border-red-200 transition-colors shrink-0"
+                          title="Hapus rilis ini"
+                        >
+                          {isDeleting ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </button>
+                      )}
+                    </div>
+
+                    {rel ? (
+                      <div className="bg-zen-linen/70 rounded-xl p-3.5 mb-4 border border-zen-sand/60 space-y-1">
+                        <p
+                          className="text-sm font-semibold text-zen-charcoal truncate"
+                          title={rel.original_name}
+                        >
+                          {rel.original_name}
+                        </p>
+                        <p className="text-xs text-zen-charcoal/70">
+                          {formatFileSize(rel.size)} • Diunggah {formatDateID(rel.uploaded_at)} WIB
+                        </p>
+                        {rel.notes && (
+                          <p className="text-xs text-zen-charcoal/80 pt-1 italic">{rel.notes}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="bg-zen-linen/40 rounded-xl p-4 mb-4 border border-zen-sand/60 border-dashed text-center">
+                        <p className="text-xs text-zen-charcoal/50 italic">
+                          Belum ada versi yang diunggah untuk kategori ini
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <a
+                    href={rel ? buildDownloadUrl(rel.download_url, rel.filename) : '#'}
+                    target={rel ? '_blank' : undefined}
+                    rel={rel ? 'noopener noreferrer' : undefined}
+                    onClick={(e) => {
+                      if (!rel) e.preventDefault();
+                    }}
+                    className={`flex items-center justify-center w-full py-2.5 px-4 rounded-lg text-sm font-medium transition-colors ${
+                      rel
+                        ? 'bg-primary-500 hover:bg-primary-600 text-white shadow-sm'
+                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    {rel ? 'Unduh dari CDN Supabase' : 'Belum Tersedia'}
+                  </a>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
-export default FilesPage;

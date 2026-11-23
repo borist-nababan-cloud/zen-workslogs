@@ -1,52 +1,38 @@
-# Multi-stage Dockerfile for Coolify deployment
+# ==============================================================================
+# Multi-Stage Production Dockerfile for Zen Work Logs (Pure React SPA + Supabase)
+# ==============================================================================
 
-# Stage 1: Build React frontend
-FROM node:18-alpine AS build
+# Stage 1: Build React Frontend
+FROM node:22-alpine AS builder
 
 WORKDIR /app/client
 
-# Force install all dependencies (including devDependencies) regardless of NODE_ENV
-COPY client/package.json ./
-RUN npm install --include=dev
+COPY client/package.json client/package-lock.json* ./
+RUN npm install && npm install --no-save @rollup/rollup-linux-x64-musl
+
+# Mandatory Build-Time Environment Variables (injected by Coolify)
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+
+RUN test -n "$VITE_SUPABASE_URL" && test -n "$VITE_SUPABASE_ANON_KEY" || (echo "ERROR: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY build args are required" && exit 1)
 
 COPY client/ ./
-# Force build to run in development mode to ensure dev tools are available
-RUN NODE_ENV=development npm run build
+RUN npm run build
 
-# Stage 2: Production server with pre-built frontend
-FROM node:18-alpine
+# Stage 2: Production Nginx Server
+FROM nginx:alpine
 
-WORKDIR /app
+RUN apk add --no-cache curl wget && rm -rf /usr/share/nginx/html/*
 
-# Install Python and build tools for better-sqlite3
-RUN apk add --no-cache python3 make g++
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/client/dist /usr/share/nginx/html
 
-# Copy server files (package.json is in root)
-COPY package.json ./
-COPY server/server.js ./server.js
-COPY server/database.js ./database.js
-COPY server/parser.js ./parser.js
-COPY server/routes ./routes
-COPY server/routes/files.js ./routes/files.js
+EXPOSE 3000 80
 
-# Install server dependencies
-RUN npm install --production
+HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -fs http://127.0.0.1:3000/healthz || wget -q -O - http://127.0.0.1:3000/healthz || exit 1
 
-# Copy built frontend from build stage
-COPY --from=build /app/client/dist ./client/dist
-
-# Create data directory for SQLite persistence
-RUN mkdir -p /app/data
-
-# Expose port
-EXPOSE 3000
-
-# Set environment to production
-ENV NODE_ENV=production
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/api/health', (r) => {if(r.statusCode !== 200) throw new Error(r.statusCode)})"
-
-# Start server
-CMD ["node", "server.js"]
+CMD ["nginx", "-g", "daemon off;"]

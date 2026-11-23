@@ -1,25 +1,15 @@
 services:
-  logsupdate:
+  worklogs:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: logsupdate-app
+    container_name: zen-worklogs-app
     ports:
       - "3000:3000"
-    volumes:
-      # Persist SQLite database
-      - ./data:/app/data
-    environment:
-      - NODE_ENV=production
-      - PORT=3000
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health')"]
-      interval: 30s
+      test: ["CMD-SHELL", "curl -fs http://127.0.0.1:3000/healthz || wget -q -O - http://127.0.0.1:3000/healthz || exit 1"]
+      interval: 15s
       timeout: 3s
       retries: 3
       start_period: 5s
-
-volumes:
-  logsupdate-data:
-    driver: local

@@ -5,45 +5,31 @@ node_modules/
 client/dist/
 client/.vite/
 
-# Server data
-server/data/
-server/uploads/
+# Legacy server & local data
+server/
+data/
+uploads/
 
-# Environment variables
+# Environment variables (keep .env.example)
 .env
-.env.local
-.env.production
+*.env
+.env.*
+!.env.example
 
-# Logs
-logs/
-*.log
-npm-debug.log*
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# IDE
-.vscode/
-.idea/
-
-# SQLite databases
+# Sensitive / Backup / Docs directories
+docs/
+.antigravity/
+.antigraviy/
+my-cred/
+database-docs/
+*.bak
+*.backup
+*.sql
 *.db
 *.sqlite
 *.sqlite3
 
-# Uploaded files
-uploads/
-
-# SQL files
-*.sql
-
-# Sensitive directories (contains credentials and sensitive data)
-docs/
-my-cred/
-database-docs/
-
-# Additional sensitive files that might contain credentials
+# Secrets & Certificates
 *_cred.*
 *_secret.*
 *_config.*
@@ -51,31 +37,25 @@ database-docs/
 *.key
 *.cert
 
-# Temporary and cache files
+# Logs & Cache
+logs/
+*.log
+npm-debug.log*
 *.tmp
 *.cache
 *.swp
 *.swo
 *~
 
-# Build artifacts
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Build binaries
 *.exe
 *.rsm
 *.dcu
 Win32/
 Win64/
-
-# Data directory (SQLite persistence)
-data/
-
-*.env
-.env
-*.sql
-docs/
-
-
-*.env
-.env
-*.sql
-docs/
-

@@ -2,42 +2,35 @@
 node_modules
 npm-debug.log
 
-# Client build artifacts (will be built in Docker)
+# Client build artifacts (built inside Docker)
 client/dist
 client/.vite
 
-# Server artifacts
-server/data
-server/uploads
+# Legacy & Backup artifacts
+server/
+data/
+*.bak
+*.backup
 
-# Git
+# Git & IDE
 .git
 .gitignore
-
-# IDE
 .vscode
 .idea
+.claude
 
-# OS
+# OS files
 .DS_Store
 Thumbs.db
 
-# Docker
+# Docker & Docs
 Dockerfile
 docker-compose.yml
 .dockerignore
-
-# Documentation
 README.md
 *.md
 
-# Plan files (from Claude)
-.claude
-
-# Don't exclude package files (needed for Docker build)
+# Keep package manifests for Docker build
 !package.json
-!package-lock.json
 !client/package.json
 !client/package-lock.json
-!server/package.json
-!server/package-lock.json

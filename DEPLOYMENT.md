@@ -1,133 +1,37 @@
-# Deployment Guide - zen-workslogs
+# Panduan Deployment — zen-workslogs (Pure SPA + Supabase Production)
 
-## Quick Summary
+Aplikasi **Zen Work Logs & Release Hub** berjalan murni sebagai aplikasi **React + Vite SPA** yang dilayani oleh **Nginx Alpine** dan terhubung langsung ke **Supabase Production** tanpa server Express maupun database SQLite lokal.
 
-Your HAVE_DONE.md Tracker application is now complete and ready for deployment to Coolify!
+## Arsitektur Container
 
-### What's Been Built
+- **Stage 1 (`node:22-alpine`)**: Mengompilasi bundle produksi di `client/dist`.
+- **Stage 2 (`nginx:alpine`)**: Menyajikan static bundle SPA di port **`3000`** dan **`80`**, lengkap dengan endpoint healthcheck `/healthz` (dan alias `/api/health`) serta aturan *anti-stale cache* untuk `index.html`.
+- **Tidak Membutuhkan Persistent Volume**: Seluruh catatan (`public.work_logs`), metadata rilis (`public.work_log_releases`), dan file biner (`storage.zen-releases`) tersimpan permanen di Supabase Production.
 
-✅ **Backend API**
-- Express server with SQLite database
-- Smart merge upload endpoint (parses and updates entries by date)
-- Search/filter endpoints with rich query support
-- Health check endpoint
+## Langkah Deployment di Coolify
 
-✅ **Frontend UI**
-- React with Vite + Tailwind CSS
-- Upload page with drag-and-drop and preview
-- Display page with search, filters, and expandable entries
-- Responsive design (mobile-friendly)
+1. Pastikan repositori `https://github.com/borist-nababan-cloud/zen-workslogs.git` (`main`) telah diperbarui.
+2. Pada dashboard Coolify untuk `worklogs.zenfamilyspa.id`:
+   - **Build Pack**: `Dockerfile` (atau `Docker Compose` dengan `docker-compose.yml`).
+   - **Port**: `3000` (juga kompatibel dengan port `80`).
+   - **Build-Time Environment Variables / Build Arguments (WAJIB — Build akan gagal jika kosong):**
+     - `VITE_SUPABASE_URL` = URL proyek Supabase Production
+     - `VITE_SUPABASE_ANON_KEY` = Publishable / Anon Key Supabase Production
+     *(Pastikan kedua variabel dicentang **"Available at Buildtime"** di Coolify karena Dockerfile tidak menyimpan kredensial hardcoded).*
+3. **Konfigurasi Supabase Auth (untuk Login Google OAuth SUPERUSER Role 8)**:
+   - Di Supabase Studio Production $\rightarrow$ **Authentication** $\rightarrow$ **URL Configuration** $\rightarrow$ **Redirect URLs**, tambahkan:
+     - `https://worklogs.zenfamilyspa.id/**`
+4. Klik **Deploy** dan verifikasi:
+   - `https://worklogs.zenfamilyspa.id/healthz` mengembalikan `200 OK`.
+   - Daftar catatan kerja termuat otomatis dari `public.work_logs`.
+   - Tombol unduhan rilis di `/` dan `/files` mengunduh langsung dari CDN Supabase.
+   - Aksi tulis (Toggle `Trained`, Tambah/Edit/Hapus Catatan, Upload/Hapus Rilis) hanya aktif setelah login menggunakan akun **SUPERUSER (Role ID 8)**.
 
-✅ **Docker Configuration**
-- Multi-stage Dockerfile for Coolify
-- docker-compose.yml for local testing
-- Persistent SQLite storage
+## Pengujian Lokal dengan Docker
 
-## Deploy to Coolify
-
-### Step 1: Push to Git
-
-```bash
-cd "d:\BEN\Zen\WORK_SPACE\frontend\worklogs"
-git init
-git add .
-git commit -m "first commit"
-git branch -M main
-git remote add origin https://github.com/borist-nababan-cloud/zen-workslogs.git
-git push -u origin main
+```powershell
+cd d:\BEN\Zen\WORK_SPACE\frontend\worklogs
+docker build --build-arg VITE_SUPABASE_URL=https://your-project.supabase.co --build-arg VITE_SUPABASE_ANON_KEY=your-key -t zen-worklogs .
+docker run --rm -p 3000:3000 zen-worklogs
 ```
-
-### Step 2: Create Application in Coolify
-
-1. Log in to your Coolify instance
-2. Click **"New Application"**
-3. Select your Git repository
-4. Configure:
-   - **Docker Compose Path**: `docker-compose.yml`
-   - **Port**: `3000`
-   - **Environment Variables** (optional):
-     - `NODE_ENV`: `production`
-     - `PORT`: `3000`
-
-### Step 3: Deploy
-
-1. Click **"Deploy"** in Coolify
-2. Wait for the build to complete (2-3 minutes)
-3. Access your app at the configured domain
-
-## Local Testing with Docker
-
-If you want to test locally before deploying:
-
-```bash
-# From the frontend\worklogs directory
-docker-compose up --build
-
-# App will be at http://localhost:3000
-# Database persists in ./data directory
-```
-
-## After Deployment
-
-### First Steps
-1. **Upload your HAVE_DONE.md**:
-   - Navigate to `/upload`
-   - Drag and drop your HAVE_DONE.md file
-   - Preview parsed entries
-   - Confirm upload
-
-2. **View your work log**:
-   - Navigate to `/` (Display page)
-   - Search across all entries
-   - Filter by date range, module, or action type
-
-### Regular Updates
-Whenever you update your HAVE_DONE.md file:
-1. Go to `/upload`
-2. Upload the updated file
-3. The smart merge will:
-   - Add new entries
-   - Update existing entries (by date)
-   - Leave unchanged entries as-is
-
-## URL Structure
-
-- `/` or `/display` - Client display page (public)
-- `/upload` - Upload page (for you to update logs)
-- `/api/health` - Health check endpoint
-- `/api/entries` - Get all entries (with filters)
-- `/api/upload` - Upload endpoint
-
-## Data Persistence
-
-- SQLite database stored in `/app/data` inside container
-- Host volume mount: `./data` directory
-- Survives container restarts and redeployments
-
-## Troubleshooting
-
-### Build Fails
-- Check Coolify logs for build errors
-- Ensure Dockerfile and docker-compose.yml are in the repo root
-
-### Empty Database After Redeploy
-- Ensure volume mount is configured correctly
-- Check that `./data` directory exists on host
-
-### Upload Fails
-- Check file size (max 5MB)
-- Ensure file is `.md` or `.txt` format
-- Check parser output for format issues
-
-## Next Steps
-
-1. **Push to Git** and deploy to Coolify
-2. **Upload your first HAVE_DONE.md** file
-3. **Test the display page** with search and filters
-4. **Share the display URL** with clients if needed
-
----
-
-**Ready to deploy!** 🚀
-
-Your application is fully functional and ready to be deployed to your Coolify instance.
+Akses aplikasi melalui `http://localhost:3000`.
