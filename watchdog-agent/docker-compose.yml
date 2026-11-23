@@ -1,0 +1,38 @@
+services:
+  zen-watchdog-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    pid: host
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    cpus: "0.5"
+    volumes:
+      - /proc:/host/proc:ro
+      - /etc/os-release:/host/os-release:ro
+      - /:/host/rootfs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - WATCHDOG_INGEST_TOKEN=${WATCHDOG_INGEST_TOKEN}
+      - POLL_INTERVAL_SECONDS=${POLL_INTERVAL_SECONDS:-30}
+      - N8N_ALERT_WEBHOOK_URL=${N8N_ALERT_WEBHOOK_URL:-}
+      - CPU_WARN=${CPU_WARN:-80}
+      - CPU_CRIT=${CPU_CRIT:-92}
+      - CPU_NICE_WARN=${CPU_NICE_WARN:-30}
+      - CPU_NICE_CRIT=${CPU_NICE_CRIT:-45}
+      - MEM_WARN=${MEM_WARN:-80}
+      - MEM_CRIT=${MEM_CRIT:-90}
+      - DISK_WARN=${DISK_WARN:-80}
+      - DISK_CRIT=${DISK_CRIT:-90}
+      - ZOMBIE_WARN=${ZOMBIE_WARN:-20}
+      - ZOMBIE_CRIT=${ZOMBIE_CRIT:-100}
+      - CONTAINER_MEM_WARN_MB=${CONTAINER_MEM_WARN_MB:-1536}
+      - CONTAINER_MEM_CRIT_MB=${CONTAINER_MEM_CRIT_MB:-2048}
+      - CONTAINER_MEM_ALLOWLIST=${CONTAINER_MEM_ALLOWLIST:-}

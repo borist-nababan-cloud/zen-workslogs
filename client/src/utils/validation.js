@@ -72,6 +72,22 @@ export const releaseUploadSchema = z.object({
     .or(z.literal('')),
 });
 
+export const watchdogTokenSchema = z.object({
+  node_id: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(
+      /^[a-z0-9][a-z0-9_-]{1,63}$/,
+      'ID Node hanya boleh 2-64 huruf kecil, angka, tanda hubung (-), atau garis bawah (_).'
+    ),
+  label: z
+    .string()
+    .trim()
+    .min(2, 'Label server minimal 2 karakter.')
+    .max(80, 'Label server maksimal 80 karakter.'),
+});
+
 export function formatZodError(zodResult) {
   if (zodResult.success) return null;
   return zodResult.error?.issues?.[0]?.message || 'Data masukan tidak valid.';

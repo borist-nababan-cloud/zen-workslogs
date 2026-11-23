@@ -27,6 +27,24 @@ Aplikasi **Zen Work Logs & Release Hub** berjalan murni sebagai aplikasi **React
    - Tombol unduhan rilis di `/` dan `/files` mengunduh langsung dari CDN Supabase.
    - Aksi tulis (Toggle `Trained`, Tambah/Edit/Hapus Catatan, Upload/Hapus Rilis) hanya aktif setelah login menggunakan akun **SUPERUSER (Role ID 8)**.
 
+## Deployment Zen Watchdog Agent di Coolify
+
+Layanan pemantau VPS (**Zen Watchdogs**) berada pada direktori `/watchdog-agent` di repositori yang sama (`borist-nababan-cloud/zen-workslogs`) dan **tidak membuka port maupun domain publik**.
+
+1. Di Coolify, tambahkan **New Resource** $\rightarrow$ **Private/Public Git Repository** $\rightarrow$ `borist-nababan-cloud/zen-workslogs` (branch `main`).
+2. Atur konfigurasi build:
+   - **Build Pack**: `Docker Compose`
+   - **Base Directory**: `/watchdog-agent`
+   - **Domains / Exposed Ports**: **Kosongkan** (agent hanya mengirim *outbound HTTPS* ke Supabase).
+3. Login ke `https://worklogs.zenfamilyspa.id/watchdogs` sebagai **SUPERUSER (Role ID 8)** $\rightarrow$ buka **Kelola Token & Setup Agent** $\rightarrow$ buat token untuk node (misal `coolify-prod-vps`).
+4. Salin Environment Variables dari modal setup ke Coolify:
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+   - `WATCHDOG_INGEST_TOKEN`
+   - `POLL_INTERVAL_SECONDS=30`
+   - *(Opsional nanti)* `N8N_ALERT_WEBHOOK_URL` untuk meneruskan notifikasi `CRITICAL`/`WARNING` ke n8n (Telegram / WhatsApp).
+5. Klik **Deploy**. Setelah ~30 detik, metrik live VPS, status container Docker, proses teratas, dan peringatan keamanan otomatis tampil eksklusif di tab **VPS Watchdogs** bagi **Role ID 8**.
+
 ## Pengujian Lokal dengan Docker
 
 ```powershell

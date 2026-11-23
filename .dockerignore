@@ -8,6 +8,7 @@ client/.vite
 
 # Legacy & Backup artifacts
 server/
+watchdog-agent/
 data/
 *.bak
 *.backup

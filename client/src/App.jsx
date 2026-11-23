@@ -10,9 +10,11 @@ import {
   ShieldCheck,
   ShieldAlert,
   AlertCircle,
+  Activity,
 } from 'lucide-react';
 import DisplayPage from './pages/Display';
 import FilesPage from './pages/Files';
+import WatchdogsPage from './pages/Watchdogs';
 import LoginModal from './components/LoginModal';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { IS_SUPABASE_CONFIGURED } from './supabase';
@@ -79,6 +81,20 @@ function AppShell() {
                 <Package className="h-4 w-4" />
                 <span>Release Hub</span>
               </Link>
+
+              {isSuperuser && (
+                <Link
+                  to="/watchdogs"
+                  className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActive('/watchdogs')
+                      ? 'bg-primary-50 text-primary-700 border border-primary-200'
+                      : 'text-zen-charcoal/80 hover:bg-zen-linen'
+                  }`}
+                >
+                  <Activity className="h-4 w-4" />
+                  <span>VPS Watchdogs</span>
+                </Link>
+              )}
 
               <div className="h-6 w-px bg-zen-sand/70 mx-2" />
 
@@ -169,6 +185,21 @@ function AppShell() {
               <span>Release Hub</span>
             </Link>
 
+            {isSuperuser && (
+              <Link
+                to="/watchdogs"
+                onClick={() => setMobileMenuOpen(false)}
+                className={`flex items-center space-x-2 px-3.5 py-2.5 rounded-lg text-sm font-medium ${
+                  isActive('/watchdogs')
+                    ? 'bg-primary-50 text-primary-700 border border-primary-200'
+                    : 'text-zen-charcoal/80 hover:bg-zen-linen'
+                }`}
+              >
+                <Activity className="h-4 w-4" />
+                <span>VPS Watchdogs</span>
+              </Link>
+            )}
+
             <div className="pt-2 border-t border-zen-sand/50">
               {authLoading ? (
                 <div className="h-9 w-full rounded-lg bg-zen-linen animate-pulse border border-zen-sand/50" />
@@ -241,6 +272,10 @@ function AppShell() {
           <Route
             path="/files"
             element={<FilesPage onRequestLogin={() => setLoginModalOpen(true)} />}
+          />
+          <Route
+            path="/watchdogs"
+            element={<WatchdogsPage onRequestLogin={() => setLoginModalOpen(true)} />}
           />
           <Route path="/upload" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
