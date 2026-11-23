@@ -8,7 +8,7 @@ FROM node:22-alpine AS builder
 WORKDIR /app/client
 
 COPY client/package.json client/package-lock.json* ./
-RUN npm install && npm install --no-save @rollup/rollup-linux-x64-musl
+RUN NODE_ENV=development npm install --include=dev && NODE_ENV=development npm install --no-save @rollup/rollup-linux-x64-musl
 
 # Mandatory Build-Time Environment Variables (injected by Coolify)
 ARG VITE_SUPABASE_URL
@@ -17,7 +17,7 @@ ARG VITE_SUPABASE_ANON_KEY
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 
-RUN test -n "$VITE_SUPABASE_URL" && test -n "$VITE_SUPABASE_ANON_KEY" || (echo "ERROR: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY build args are required" && exit 1)
+RUN node -e "if (!process.env.VITE_SUPABASE_URL || !process.env.VITE_SUPABASE_ANON_KEY) { console.error('ERROR: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY build args are required'); process.exit(1); }"
 
 COPY client/ ./
 RUN npm run build
