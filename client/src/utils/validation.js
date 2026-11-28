@@ -67,9 +67,17 @@ export const releaseUploadSchema = z.object({
   notes: z
     .string()
     .trim()
-    .max(500, 'Catatan rilis maksimal 500 karakter.')
+    .max(2000, 'Catatan rilis maksimal 2.000 karakter.')
     .optional()
     .or(z.literal('')),
+  target_outlets_raw: z
+    .string()
+    .trim()
+    .max(200, 'Daftar kode outlet maksimal 200 karakter.')
+    .regex(/^[a-zA-Z0-9,\s]*$/, 'Format kode outlet hanya boleh huruf, angka, dan koma (contoh: 101, 116).')
+    .optional()
+    .or(z.literal('')),
+  is_mandatory: z.boolean().optional().default(false),
 });
 
 export const watchdogTokenSchema = z.object({
